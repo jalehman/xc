@@ -1,6 +1,7 @@
 /**
  * Creates authenticated SDK Client instances from stored credentials.
  * Handles token refresh for OAuth2 accounts.
+ * Wraps the client with a Proxy that logs API calls and enforces budgets.
  */
 
 import { Client } from "@xdevplatform/xdk";
@@ -10,10 +11,49 @@ import {
   type AuthCredential,
 } from "./config.js";
 import { refreshAccessToken } from "./oauth.js";
+import { logApiCall } from "./cost.js";
+import { checkBudget } from "./budget.js";
+
+/**
+ * Wrap an SDK Client so every namespace method call (e.g. client.posts.searchRecent)
+ * is intercepted to check budget limits and log usage before forwarding.
+ */
+function wrapClient(client: Client): Client {
+  return new Proxy(client, {
+    get(target, prop) {
+      const value = (target as unknown as Record<string | symbol, unknown>)[prop];
+
+      // Only proxy object namespaces (posts, users, usage, etc.)
+      if (value && typeof value === "object" && typeof prop === "string") {
+        return new Proxy(value as Record<string | symbol, unknown>, {
+          get(nsTarget, nsProp) {
+            const nsValue = nsTarget[nsProp];
+
+            // Wrap functions to add budget check + logging
+            if (typeof nsValue === "function" && typeof nsProp === "string") {
+              return async (...args: unknown[]) => {
+                const endpoint = `${prop}.${nsProp}`;
+                await checkBudget(endpoint);
+                logApiCall(endpoint);
+                return (nsValue as (...a: unknown[]) => unknown).apply(
+                  nsTarget,
+                  args,
+                );
+              };
+            }
+            return nsValue;
+          },
+        });
+      }
+      return value;
+    },
+  }) as Client;
+}
 
 /**
  * Create an authenticated XDK Client from stored account credentials.
  * Automatically refreshes OAuth2 tokens if expired.
+ * Returns a proxy-wrapped client that logs usage and enforces budgets.
  */
 export async function getClient(accountName?: string): Promise<Client> {
   const account = getAccount(accountName);
@@ -30,7 +70,7 @@ export async function getClient(accountName?: string): Promise<Client> {
     if (!auth.bearerToken) {
       throw new Error("Bearer token is empty. Run: xc auth token <TOKEN>");
     }
-    return new Client({ bearerToken: auth.bearerToken });
+    return wrapClient(new Client({ bearerToken: auth.bearerToken }));
   }
 
   // OAuth 2.0 — check expiry, refresh if needed
@@ -64,10 +104,10 @@ export async function getClient(accountName?: string): Promise<Client> {
       const name = accountName ?? "default";
       setAccount(name, { ...account, auth: updatedAuth });
 
-      return new Client({ accessToken: result.accessToken });
+      return wrapClient(new Client({ accessToken: result.accessToken }));
     }
 
-    return new Client({ accessToken: auth.accessToken });
+    return wrapClient(new Client({ accessToken: auth.accessToken }));
   }
 
   throw new Error(`Unknown auth type: ${auth.type}`);
