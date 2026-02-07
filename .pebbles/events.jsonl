@@ -52,3 +52,12 @@
 {"type":"close","timestamp":"2026-02-07T06:15:30.389546Z","issue_id":"xc-160","payload":{}}
 {"type":"close","timestamp":"2026-02-07T06:15:30.423651Z","issue_id":"xc-924","payload":{}}
 {"type":"close","timestamp":"2026-02-07T06:15:30.458385Z","issue_id":"xc-057","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:06:02.402307Z","issue_id":"xc-1bf","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:06:02.437597Z","issue_id":"xc-8bb","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:06:02.471324Z","issue_id":"xc-9bf","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:06:02.505227Z","issue_id":"xc-0ef","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:06:02.540537Z","issue_id":"xc-a01","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:06:02.576999Z","issue_id":"xc-0fa","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:06:02.610307Z","issue_id":"xc-ac6","payload":{}}
+{"type":"create","timestamp":"2026-02-07T07:09:19.843475Z","issue_id":"xc-84a","payload":{"description":"Add a password/PIN protection mechanism for budget-changing commands (xc budget set, xc budget reset). This prevents agents or scripts from silently raising their own spending limits.\n\nImplementation:\n- xc budget lock --password \u003cpass\u003e — set a password on budget changes\n- xc budget unlock --password \u003cpass\u003e — temporarily unlock for changes\n- xc budget set/reset require the password when locked\n- Store password hash (bcrypt or argon2) in ~/.xc/budget.json\n- Read-only commands (xc budget show, xc cost) do NOT require password\n- Optional: --password flag on set/reset for one-shot unlock\n\nThis is critical for agent safety — prevents a runaway agent from disabling its own budget limits.","priority":"2","title":"Password-protect budget commands","type":"task"}}
+{"type":"dep_add","timestamp":"2026-02-07T07:09:23.852456Z","issue_id":"xc-80c","payload":{"dep_type":"blocks","depends_on":"xc-84a"}}
