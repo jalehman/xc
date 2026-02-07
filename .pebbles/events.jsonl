@@ -69,3 +69,15 @@
 {"type":"dep_add","timestamp":"2026-02-07T07:09:55.1749Z","issue_id":"xc-bab","payload":{"dep_type":"blocks","depends_on":"xc-f09"}}
 {"type":"dep_add","timestamp":"2026-02-07T07:09:58.932653Z","issue_id":"xc-bab","payload":{"dep_type":"blocks","depends_on":"xc-156"}}
 {"type":"dep_add","timestamp":"2026-02-07T07:09:58.971926Z","issue_id":"xc-156","payload":{"dep_type":"blocks","depends_on":"xc-045"}}
+{"type":"close","timestamp":"2026-02-07T07:27:04.267646Z","issue_id":"xc-b90","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:27:04.306942Z","issue_id":"xc-e3c","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:27:04.345091Z","issue_id":"xc-2b2","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:27:04.381609Z","issue_id":"xc-f09","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:50:58.386894Z","issue_id":"xc-897","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:50:58.428891Z","issue_id":"xc-d91","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:50:58.467967Z","issue_id":"xc-b7f","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:50:58.509679Z","issue_id":"xc-84a","payload":{}}
+{"type":"close","timestamp":"2026-02-07T07:50:58.552004Z","issue_id":"xc-80c","payload":{}}
+{"type":"close","timestamp":"2026-02-07T08:07:12.908816Z","issue_id":"xc-045","payload":{}}
+{"type":"close","timestamp":"2026-02-07T08:07:12.951525Z","issue_id":"xc-156","payload":{}}
+{"type":"close","timestamp":"2026-02-07T08:07:12.990293Z","issue_id":"xc-bab","payload":{}}
