@@ -15,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Command } from "commander";
 import { getClient } from "../lib/api.js";
+import { getAccount } from "../lib/config.js";
 
 /** MIME type detection based on file extension. */
 const MIME_MAP: Record<string, string> = {
@@ -75,6 +76,7 @@ async function chunkedUpload(
   filePath: string,
   mediaType: string,
   mediaCategory: string,
+  accountName?: string,
 ): Promise<string> {
   const fileSize = fs.statSync(filePath).size;
 
@@ -93,7 +95,14 @@ async function chunkedUpload(
     throw new Error("Failed to initialize upload (no media ID returned)");
   }
 
-  // APPEND — send file in chunks
+  // APPEND — send file in chunks via multipart/form-data
+  // The X API v2 APPEND endpoint requires multipart, not JSON body
+  const account = getAccount(accountName);
+  const accessToken = account?.auth?.accessToken;
+  if (!accessToken) {
+    throw new Error("No access token available for chunked upload");
+  }
+
   const fd = fs.openSync(filePath, "r");
   try {
     let segmentIndex = 0;
@@ -104,15 +113,23 @@ async function chunkedUpload(
       const buffer = Buffer.alloc(chunkLen);
       fs.readSync(fd, buffer, 0, chunkLen, bytesRead);
 
-      // Convert to base64 for the API
-      const base64Chunk = buffer.toString("base64");
+      const formData = new FormData();
+      formData.append("media", new Blob([buffer]), path.basename(filePath));
+      formData.append("segment_index", String(segmentIndex));
 
-      await client.media.appendUpload(mediaId, {
-        body: {
-          mediaData: base64Chunk,
-          segmentIndex,
-        },
-      } as Parameters<typeof client.media.appendUpload>[1]);
+      const appendUrl = `https://api.x.com/2/media/upload/${mediaId}/append`;
+      const resp = await fetch(appendUrl, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: formData,
+      });
+
+      if (!resp.ok) {
+        const body = await resp.text();
+        throw new Error(
+          `APPEND failed (segment ${segmentIndex}): HTTP ${resp.status} ${body}`,
+        );
+      }
 
       bytesRead += chunkLen;
       segmentIndex++;
@@ -231,7 +248,7 @@ export async function uploadMedia(
   if (mediaCategory === "tweet_image") {
     return oneShotUpload(client, filePath, mediaType, mediaCategory);
   }
-  return chunkedUpload(client, filePath, mediaType, mediaCategory);
+  return chunkedUpload(client, filePath, mediaType, mediaCategory, accountName);
 }
 
 export function registerMediaCommand(program: Command): void {
