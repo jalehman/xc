@@ -1,38 +1,19 @@
-/** Shared types and formatting utilities for tweet/user display. */
+/**
+ * Shared formatting utilities for tweet/user display.
+ * Field names use SDK camelCase conventions (authorId, publicMetrics, etc.).
+ */
 
-export interface TweetData {
-  id: string;
-  text: string;
-  created_at?: string;
-  author_id?: string;
-  public_metrics?: {
-    retweet_count: number;
-    reply_count: number;
-    like_count: number;
-    quote_count: number;
-  };
-}
+import type { Schemas } from "@xdevplatform/xdk";
 
-export interface UserData {
-  id: string;
-  name: string;
-  username: string;
-  description?: string;
-  created_at?: string;
-  public_metrics?: {
-    followers_count: number;
-    following_count: number;
-    tweet_count: number;
-    listed_count: number;
-  };
-}
+type Tweet = Schemas.Tweet;
+type User = Schemas.User;
 
 /** Build a lookup map from an API includes.users array. */
-export function buildUserMap(users?: UserData[]): Map<string, UserData> {
-  const map = new Map<string, UserData>();
+export function buildUserMap(users?: User[]): Map<string, User> {
+  const map = new Map<string, User>();
   if (users) {
     for (const user of users) {
-      map.set(user.id, user);
+      if (user.id) map.set(user.id, user);
     }
   }
   return map;
@@ -40,28 +21,31 @@ export function buildUserMap(users?: UserData[]): Map<string, UserData> {
 
 /** Format a single tweet for human-readable terminal output. */
 export function formatTweet(
-  tweet: TweetData,
-  usersById?: Map<string, UserData>,
+  tweet: Tweet,
+  usersById?: Map<string, User>,
 ): string {
   const lines: string[] = [];
 
   // Author line
-  const author = tweet.author_id ? usersById?.get(tweet.author_id) : undefined;
+  const author = tweet.authorId
+    ? usersById?.get(tweet.authorId)
+    : undefined;
   if (author) {
     lines.push(`@${author.username} (${author.name})`);
   }
 
   // Tweet text (indent continuation lines)
-  lines.push(`  ${tweet.text.replace(/\n/g, "\n  ")}`);
+  const text = tweet.text ?? "";
+  lines.push(`  ${text.replace(/\n/g, "\n  ")}`);
 
-  // Engagement metrics
-  const m = tweet.public_metrics;
+  // Engagement metrics (publicMetrics is Record<string, any>)
+  const m = tweet.publicMetrics as Record<string, number> | undefined;
   if (m) {
     const parts: string[] = [];
-    if (m.like_count) parts.push(`${m.like_count} likes`);
-    if (m.retweet_count) parts.push(`${m.retweet_count} RTs`);
-    if (m.reply_count) parts.push(`${m.reply_count} replies`);
-    if (m.quote_count) parts.push(`${m.quote_count} quotes`);
+    if (m.likeCount) parts.push(`${m.likeCount} likes`);
+    if (m.retweetCount) parts.push(`${m.retweetCount} RTs`);
+    if (m.replyCount) parts.push(`${m.replyCount} replies`);
+    if (m.quoteCount) parts.push(`${m.quoteCount} quotes`);
     if (parts.length > 0) {
       lines.push(`  ${parts.join(" · ")}`);
     }
@@ -69,19 +53,23 @@ export function formatTweet(
 
   // Timestamp and post ID
   const meta: string[] = [];
-  if (tweet.created_at) {
-    meta.push(new Date(tweet.created_at).toLocaleString());
+  if (tweet.createdAt) {
+    meta.push(new Date(tweet.createdAt).toLocaleString());
   }
-  meta.push(`id:${tweet.id}`);
-  lines.push(`  ${meta.join(" · ")}`);
+  if (tweet.id) {
+    meta.push(`id:${tweet.id}`);
+  }
+  if (meta.length > 0) {
+    lines.push(`  ${meta.join(" · ")}`);
+  }
 
   return lines.join("\n");
 }
 
-/** Format a list of tweets with separator lines between them. */
+/** Format a list of tweets with blank lines between them. */
 export function formatTweetList(
-  tweets: TweetData[],
-  usersById?: Map<string, UserData>,
+  tweets: Tweet[],
+  usersById?: Map<string, User>,
 ): string {
   return tweets.map((t) => formatTweet(t, usersById)).join("\n\n");
 }

@@ -18,6 +18,7 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
+    "@xdevplatform/xdk": "^0.4.0",
     "commander": "^13.0.0",
     "open": "^10.0.0"
   }

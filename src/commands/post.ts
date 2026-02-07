@@ -1,15 +1,5 @@
 import { Command } from "commander";
-import { apiRequest } from "../lib/api.js";
-
-interface CreateTweetBody {
-  text: string;
-  reply?: { in_reply_to_tweet_id: string };
-  quote_tweet_id?: string;
-}
-
-interface CreateTweetResponse {
-  data: { id: string; text: string };
-}
+import { getClient } from "../lib/api.js";
 
 export function registerPostCommand(program: Command): void {
   program
@@ -21,30 +11,31 @@ export function registerPostCommand(program: Command): void {
     .option("--account <name>", "Account to use")
     .action(async (text: string, opts) => {
       try {
-        // Build request body
-        const body: CreateTweetBody = { text };
+        const client = await getClient(opts.account);
 
+        // Build the create request
+        const body: Record<string, unknown> = { text };
         if (opts.reply) {
-          body.reply = { in_reply_to_tweet_id: opts.reply };
+          body.reply = { inReplyToTweetId: opts.reply };
         }
         if (opts.quote) {
-          body.quote_tweet_id = opts.quote;
+          body.quoteTweetId = opts.quote;
         }
 
-        const result = (await apiRequest({
-          method: "POST",
-          endpoint: "/tweets",
-          body,
-          account: opts.account,
-        })) as CreateTweetResponse;
+        const result = await client.posts.create(body as Parameters<typeof client.posts.create>[0]);
 
         if (opts.json) {
           console.log(JSON.stringify(result, null, 2));
           return;
         }
 
-        console.log(`Posted (id: ${result.data.id})`);
-        console.log(`  ${result.data.text}`);
+        const data = result.data as { id?: string; text?: string } | undefined;
+        if (data?.id) {
+          console.log(`Posted (id: ${data.id})`);
+          if (data.text) console.log(`  ${data.text}`);
+        } else {
+          console.log("Post created.");
+        }
       } catch (err) {
         console.error(`Error: ${err instanceof Error ? err.message : err}`);
         process.exit(1);

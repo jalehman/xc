@@ -1,12 +1,18 @@
+/**
+ * OAuth 2.0 PKCE flow using the XDK SDK.
+ * Handles authorization, token exchange, and token refresh.
+ */
+
 import crypto from "node:crypto";
 import http from "node:http";
 import { URL } from "node:url";
+import {
+  OAuth2,
+  generateCodeVerifier,
+  type OAuth2Token,
+} from "@xdevplatform/xdk";
 
-const AUTHORIZE_URL = "https://x.com/i/oauth2/authorize";
-const TOKEN_URL = "https://api.x.com/2/oauth2/token";
-
-// X API v2 OAuth 2.0 with PKCE
-// https://docs.x.com/resources/fundamentals/authentication
+export type { OAuth2Token };
 
 const SCOPES = [
   "tweet.read",
@@ -20,28 +26,8 @@ const SCOPES = [
   "list.write",
   "bookmark.read",
   "bookmark.write",
-  "offline.access", // enables refresh tokens
-].join(" ");
-
-function generateCodeVerifier(): string {
-  return crypto.randomBytes(32).toString("base64url");
-}
-
-function generateCodeChallenge(verifier: string): string {
-  return crypto.createHash("sha256").update(verifier).digest("base64url");
-}
-
-function generateState(): string {
-  return crypto.randomBytes(16).toString("hex");
-}
-
-export interface OAuthTokenResponse {
-  access_token: string;
-  refresh_token?: string;
-  expires_in: number;
-  token_type: string;
-  scope: string;
-}
+  "offline.access",
+];
 
 export interface OAuthFlowResult {
   accessToken: string;
@@ -54,7 +40,7 @@ export interface OAuthFlowResult {
  * Run the OAuth 2.0 PKCE flow:
  * 1. Start a local HTTP server to receive the callback
  * 2. Open the browser to X's authorize URL
- * 3. Exchange the authorization code for tokens
+ * 3. Exchange the authorization code for tokens via the SDK
  */
 export async function runOAuthFlow(params: {
   clientId: string;
@@ -63,21 +49,23 @@ export async function runOAuthFlow(params: {
 }): Promise<OAuthFlowResult> {
   const { clientId, port = 3391 } = params;
   const redirectUri = `http://127.0.0.1:${port}/callback`;
+
+  // Configure SDK OAuth2 handler
+  const oauth2 = new OAuth2({
+    clientId,
+    redirectUri,
+    scope: SCOPES,
+  });
+
+  // Generate PKCE verifier and let SDK compute the challenge
   const codeVerifier = generateCodeVerifier();
-  const codeChallenge = generateCodeChallenge(codeVerifier);
-  const state = generateState();
+  await oauth2.setPkceParameters(codeVerifier);
 
-  // Build authorization URL
-  const authUrl = new URL(AUTHORIZE_URL);
-  authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("client_id", clientId);
-  authUrl.searchParams.set("redirect_uri", redirectUri);
-  authUrl.searchParams.set("scope", SCOPES);
-  authUrl.searchParams.set("state", state);
-  authUrl.searchParams.set("code_challenge", codeChallenge);
-  authUrl.searchParams.set("code_challenge_method", "S256");
+  // Generate random state for CSRF protection
+  const state = crypto.randomBytes(16).toString("hex");
+  const authUrl = await oauth2.getAuthorizationUrl(state);
 
-  // Wait for callback
+  // Wait for the OAuth callback on our local server
   const code = await new Promise<string>((resolve, reject) => {
     const server = http.createServer((req, res) => {
       const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
@@ -132,7 +120,7 @@ export async function runOAuthFlow(params: {
     });
 
     server.listen(port, "127.0.0.1", () => {
-      params.onOpenUrl(authUrl.toString());
+      params.onOpenUrl(authUrl);
     });
 
     // Timeout after 2 minutes
@@ -142,36 +130,19 @@ export async function runOAuthFlow(params: {
     }, 120_000);
   });
 
-  // Exchange code for tokens
-  const tokenResponse = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: redirectUri,
-      client_id: clientId,
-      code_verifier: codeVerifier,
-    }).toString(),
-  });
-
-  if (!tokenResponse.ok) {
-    const body = await tokenResponse.text();
-    throw new Error(`Token exchange failed (${tokenResponse.status}): ${body}`);
-  }
-
-  const tokens = (await tokenResponse.json()) as OAuthTokenResponse;
+  // Exchange the authorization code for tokens via SDK
+  const tokens = await oauth2.exchangeCode(code, codeVerifier);
 
   return {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
     expiresAt: Date.now() + tokens.expires_in * 1000,
-    scopes: tokens.scope,
+    scopes: tokens.scope ?? "",
   };
 }
 
 /**
- * Refresh an expired access token using a refresh token.
+ * Refresh an expired access token using the SDK OAuth2 handler.
  */
 export async function refreshAccessToken(params: {
   clientId: string;
@@ -179,27 +150,17 @@ export async function refreshAccessToken(params: {
 }): Promise<OAuthFlowResult> {
   const { clientId, refreshToken } = params;
 
-  const response = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-      client_id: clientId,
-    }).toString(),
+  const oauth2 = new OAuth2({
+    clientId,
+    redirectUri: "http://127.0.0.1:3391/callback",
   });
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Token refresh failed (${response.status}): ${body}`);
-  }
-
-  const tokens = (await response.json()) as OAuthTokenResponse;
+  const tokens = await oauth2.refreshToken(refreshToken);
 
   return {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token ?? refreshToken,
     expiresAt: Date.now() + tokens.expires_in * 1000,
-    scopes: tokens.scope,
+    scopes: tokens.scope ?? "",
   };
 }

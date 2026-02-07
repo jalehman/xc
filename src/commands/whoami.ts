@@ -1,5 +1,15 @@
 import { Command } from "commander";
-import { apiRequest } from "../lib/api.js";
+import { getClient } from "../lib/api.js";
+
+const USER_FIELDS = [
+  "created_at",
+  "description",
+  "public_metrics",
+  "verified",
+  "location",
+  "url",
+  "profile_image_url",
+];
 
 export function registerWhoamiCommand(program: Command): void {
   program
@@ -9,40 +19,21 @@ export function registerWhoamiCommand(program: Command): void {
     .option("--json", "Output raw JSON")
     .action(async (opts) => {
       try {
-        const result = (await apiRequest({
-          endpoint: "/users/me",
-          query: {
-            "user.fields":
-              "created_at,description,public_metrics,verified,location,url,profile_image_url",
-          },
-          account: opts.account,
-        })) as {
-          data: {
-            id: string;
-            name: string;
-            username: string;
-            description?: string;
-            location?: string;
-            url?: string;
-            verified?: boolean;
-            created_at?: string;
-            profile_image_url?: string;
-            public_metrics?: {
-              followers_count: number;
-              following_count: number;
-              tweet_count: number;
-              listed_count: number;
-            };
-          };
-        };
+        const client = await getClient(opts.account);
+        const result = await client.users.getMe({ userFields: USER_FIELDS });
 
         if (opts.json) {
           console.log(JSON.stringify(result, null, 2));
           return;
         }
 
-        const { data } = result;
-        const m = data.public_metrics;
+        const data = result.data;
+        if (!data) {
+          console.error("Could not fetch user info.");
+          process.exit(1);
+        }
+
+        const m = data.publicMetrics as Record<string, number> | undefined;
 
         console.log(`@${data.username} (${data.name})`);
         if (data.description) console.log(`  ${data.description}`);
@@ -51,11 +42,13 @@ export function registerWhoamiCommand(program: Command): void {
         if (data.verified) console.log(`  ✓ Verified`);
         if (m) {
           console.log(
-            `  ${m.followers_count.toLocaleString()} followers · ${m.following_count.toLocaleString()} following · ${m.tweet_count.toLocaleString()} posts`,
+            `  ${(m.followersCount ?? 0).toLocaleString()} followers · ${(m.followingCount ?? 0).toLocaleString()} following · ${(m.tweetCount ?? 0).toLocaleString()} posts`,
           );
         }
-        if (data.created_at) {
-          console.log(`  Joined ${new Date(data.created_at).toLocaleDateString()}`);
+        if (data.createdAt) {
+          console.log(
+            `  Joined ${new Date(data.createdAt).toLocaleDateString()}`,
+          );
         }
       } catch (err) {
         console.error(`Error: ${err instanceof Error ? err.message : err}`);

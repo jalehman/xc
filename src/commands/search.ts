@@ -1,20 +1,10 @@
 import { Command } from "commander";
-import { apiRequest } from "../lib/api.js";
-import {
-  buildUserMap,
-  formatTweetList,
-  type TweetData,
-  type UserData,
-} from "../lib/format.js";
+import { getClient } from "../lib/api.js";
+import { buildUserMap, formatTweetList } from "../lib/format.js";
 
-const TWEET_FIELDS = "created_at,public_metrics,author_id";
-const TWEET_EXPANSIONS = "author_id";
-
-interface SearchResponse {
-  data?: TweetData[];
-  includes?: { users?: UserData[] };
-  meta?: { result_count: number; next_token?: string };
-}
+const TWEET_FIELDS = ["created_at", "public_metrics", "author_id"];
+const EXPANSIONS = ["author_id"];
+const USER_FIELDS = ["name", "username"];
 
 export function registerSearchCommand(program: Command): void {
   program
@@ -26,20 +16,17 @@ export function registerSearchCommand(program: Command): void {
     .option("--account <name>", "Account to use")
     .action(async (query: string, opts) => {
       try {
-        const endpoint = opts.archive
-          ? "/tweets/search/all"
-          : "/tweets/search/recent";
+        const client = await getClient(opts.account);
+        const searchOpts = {
+          tweetFields: TWEET_FIELDS,
+          expansions: EXPANSIONS,
+          userFields: USER_FIELDS,
+          maxResults: parseInt(opts.limit, 10),
+        };
 
-        const result = (await apiRequest({
-          endpoint,
-          query: {
-            query,
-            max_results: opts.limit,
-            "tweet.fields": TWEET_FIELDS,
-            expansions: TWEET_EXPANSIONS,
-          },
-          account: opts.account,
-        })) as SearchResponse;
+        const result = opts.archive
+          ? await client.posts.searchAll(query, searchOpts)
+          : await client.posts.searchRecent(query, searchOpts);
 
         if (opts.json) {
           console.log(JSON.stringify(result, null, 2));
@@ -56,7 +43,8 @@ export function registerSearchCommand(program: Command): void {
         console.log(formatTweetList(tweets, usersById));
 
         // Show result count summary
-        const count = result.meta?.result_count ?? tweets.length;
+        const meta = result.meta as Record<string, unknown> | undefined;
+        const count = (meta?.resultCount as number) ?? tweets.length;
         console.log(`\n— ${count} result${count !== 1 ? "s" : ""}`);
       } catch (err) {
         console.error(`Error: ${err instanceof Error ? err.message : err}`);

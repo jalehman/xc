@@ -1,10 +1,6 @@
 import { Command } from "commander";
-import { apiRequest } from "../lib/api.js";
+import { getClient } from "../lib/api.js";
 import { resolveAuthenticatedUserId } from "../lib/resolve.js";
-
-interface LikeResponse {
-  data: { liked: boolean };
-}
 
 export function registerLikeCommand(program: Command): void {
   program
@@ -15,13 +11,11 @@ export function registerLikeCommand(program: Command): void {
     .action(async (postId: string, opts) => {
       try {
         const userId = await resolveAuthenticatedUserId(opts.account);
+        const client = await getClient(opts.account);
 
-        const result = (await apiRequest({
-          method: "POST",
-          endpoint: `/users/${userId}/likes`,
-          body: { tweet_id: postId },
-          account: opts.account,
-        })) as LikeResponse;
+        const result = await client.users.likePost(userId, {
+          body: { tweetId: postId },
+        });
 
         if (opts.json) {
           console.log(JSON.stringify(result, null, 2));
@@ -45,12 +39,9 @@ export function registerUnlikeCommand(program: Command): void {
     .action(async (postId: string, opts) => {
       try {
         const userId = await resolveAuthenticatedUserId(opts.account);
+        const client = await getClient(opts.account);
 
-        const result = (await apiRequest({
-          method: "DELETE",
-          endpoint: `/users/${userId}/likes/${postId}`,
-          account: opts.account,
-        })) as LikeResponse;
+        const result = await client.users.unlikePost(userId, postId);
 
         if (opts.json) {
           console.log(JSON.stringify(result, null, 2));

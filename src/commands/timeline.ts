@@ -1,21 +1,11 @@
 import { Command } from "commander";
-import { apiRequest } from "../lib/api.js";
-import {
-  buildUserMap,
-  formatTweetList,
-  type TweetData,
-  type UserData,
-} from "../lib/format.js";
+import { getClient } from "../lib/api.js";
+import { buildUserMap, formatTweetList } from "../lib/format.js";
 import { resolveAuthenticatedUserId, resolveUserId } from "../lib/resolve.js";
 
-const TWEET_FIELDS = "created_at,public_metrics,author_id";
-const TWEET_EXPANSIONS = "author_id";
-
-interface TimelineResponse {
-  data?: TweetData[];
-  includes?: { users?: UserData[] };
-  meta?: { result_count: number; next_token?: string };
-}
+const TWEET_FIELDS = ["created_at", "public_metrics", "author_id"];
+const EXPANSIONS = ["author_id"];
+const USER_FIELDS = ["name", "username"];
 
 export function registerTimelineCommand(program: Command): void {
   program
@@ -28,27 +18,25 @@ export function registerTimelineCommand(program: Command): void {
     .option("--account <name>", "Account to use")
     .action(async (username: string | undefined, opts) => {
       try {
-        let endpoint: string;
+        const client = await getClient(opts.account);
+        const fieldOpts = {
+          tweetFields: TWEET_FIELDS,
+          expansions: EXPANSIONS,
+          userFields: USER_FIELDS,
+          maxResults: parseInt(opts.limit, 10),
+        };
+
+        let result;
 
         if (username) {
-          // User timeline: look up user ID then fetch their tweets
+          // User timeline: fetch their posts
           const userId = await resolveUserId(username, opts.account);
-          endpoint = `/users/${userId}/tweets`;
+          result = await client.users.getPosts(userId, fieldOpts);
         } else {
-          // Home timeline: authenticated user's reverse-chronological feed
+          // Home timeline: reverse-chronological feed
           const myId = await resolveAuthenticatedUserId(opts.account);
-          endpoint = `/users/${myId}/timelines/reverse_chronological`;
+          result = await client.users.getTimeline(myId, fieldOpts);
         }
-
-        const result = (await apiRequest({
-          endpoint,
-          query: {
-            max_results: opts.limit,
-            "tweet.fields": TWEET_FIELDS,
-            expansions: TWEET_EXPANSIONS,
-          },
-          account: opts.account,
-        })) as TimelineResponse;
 
         if (opts.json) {
           console.log(JSON.stringify(result, null, 2));

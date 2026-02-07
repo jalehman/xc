@@ -1,7 +1,7 @@
 import { Command } from "commander";
+import { Client } from "@xdevplatform/xdk";
 import open from "open";
 import {
-  getAccount,
   getConfigPath,
   loadConfig,
   saveConfig,
@@ -9,7 +9,6 @@ import {
   setDefaultAccount,
 } from "../lib/config.js";
 import { runOAuthFlow } from "../lib/oauth.js";
-import { apiRequest } from "../lib/api.js";
 
 export function registerAuthCommand(program: Command): void {
   const auth = program.command("auth").description("Manage authentication");
@@ -48,7 +47,7 @@ export function registerAuthCommand(program: Command): void {
           },
         });
 
-        // Fetch user info
+        // Save credentials
         setAccount(opts.account, {
           name: opts.account,
           auth: {
@@ -60,25 +59,27 @@ export function registerAuthCommand(program: Command): void {
           },
         });
 
-        // Try to fetch username
+        // Fetch user info using SDK client directly with new token
         try {
-          const me = (await apiRequest({
-            endpoint: "/users/me",
-            query: { "user.fields": "username" },
-            account: opts.account,
-          })) as { data: { username: string; id: string; name: string } };
+          const client = new Client({ accessToken: result.accessToken });
+          const me = await client.users.getMe({ userFields: ["username"] });
 
-          const config = loadConfig();
-          const account = config.accounts[opts.account];
-          if (account) {
-            account.userId = me.data.id;
-            account.username = me.data.username;
-            saveConfig(config);
+          if (me.data) {
+            const config = loadConfig();
+            const account = config.accounts[opts.account];
+            if (account) {
+              account.userId = me.data.id;
+              account.username = me.data.username;
+              saveConfig(config);
+            }
+
+            console.log(`\n✓ Authenticated as @${me.data.username} (${me.data.name})`);
+            console.log(`  Account: ${opts.account}`);
+            console.log(`  Scopes: ${result.scopes}`);
+          } else {
+            console.log(`\n✓ Authenticated (account: ${opts.account})`);
+            console.log(`  Scopes: ${result.scopes}`);
           }
-
-          console.log(`\n✓ Authenticated as @${me.data.username} (${me.data.name})`);
-          console.log(`  Account: ${opts.account}`);
-          console.log(`  Scopes: ${result.scopes}`);
         } catch {
           console.log(`\n✓ Authenticated (account: ${opts.account})`);
           console.log(`  Scopes: ${result.scopes}`);
