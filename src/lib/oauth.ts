@@ -26,6 +26,9 @@ const SCOPES = [
   "list.write",
   "bookmark.read",
   "bookmark.write",
+  "dm.read",
+  "dm.write",
+  "media.write",
   "offline.access",
 ];
 
